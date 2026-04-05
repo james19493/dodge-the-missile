@@ -1,0 +1,16 @@
+certifi==2026.2.25
+cffi==2.0.0
+charset-normalizer==3.4.7
+cryptography==46.0.6
+idna==3.11
+jellyfish==1.2.1
+packaging==26.0
+pexpect==4.9.0
+ptyprocess==0.7.0
+pycparser==3.0
+pygame==2.6.1
+pytz==2026.1.post1
+PyYAML==6.0.3
+requests==2.33.1
+termcolor==1.1.0
+urllib3==2.6.3
