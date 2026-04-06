@@ -70,9 +70,24 @@ difficulty = "easy"
 pygame.display.set_caption("Select Difficulty")
 # Difficulty settings
 difficulty_settings = {
-    'easy':   {'player_speed': 5, 'missile_speed': 4, 'missile_spawn_rate': 95},
-    'medium': {'player_speed': 4, 'missile_speed': 5, 'missile_spawn_rate': 60},
-    'hard':   {'player_speed': 4, 'missile_speed': 4, 'missile_spawn_rate': 30},
+    'easy': {
+        'player_speed': 5,
+        'missile_speed': 4,
+        'missile_spawn_rate': 95,
+        'missile_type_weights': {'homing': 1, 'exploding': 5, 'zigzag': 7}
+    },
+    'medium': {
+        'player_speed': 4,
+        'missile_speed': 5,
+        'missile_spawn_rate': 60,
+        'missile_type_weights': {'homing': 2, 'exploding': 7, 'zigzag': 10}
+    },
+    'hard': {
+        'player_speed': 4,
+        'missile_speed': 4,
+        'missile_spawn_rate': 30,
+        'missile_type_weights': {'homing': 3, 'exploding': 10, 'zigzag': 13}
+    },
 }
 def error():
     raise ImportError("Pygame image support is not available. Please install pygame with image support.")
@@ -138,6 +153,9 @@ def show_instructions():
             if event.type == QUIT:
                 pygame.quit()
                 exit()
+            elif event.type == KEYDOWN and event.key == K_ESCAPE:
+                pygame.quit()
+                exit()
             elif event.type == KEYUP:
                 waiting = False
 def draw_menu(current_button_colour, button_rect):
@@ -154,6 +172,7 @@ def draw_menu(current_button_colour, button_rect):
     SCREEN.blit(title_text, title_rect)
     SCREEN.blit(instruction_text, instruction_rect)
 
+    difficulty_rects = []
     for i, diff in enumerate(difficulties):
         colour = (255, 255, 255)
         if i == selected:
@@ -161,6 +180,7 @@ def draw_menu(current_button_colour, button_rect):
         text = option_size.render(diff, True, colour)
         rect = text.get_rect(center=(WIDTH//2, int(HEIGHT*0.46) + i*int(HEIGHT*0.09)))
         SCREEN.blit(text, rect)
+        difficulty_rects.append(rect)
 
     pygame.draw.rect(SCREEN, current_button_colour, button_rect)
     text_font = get_scaled_font(0.04)
@@ -168,7 +188,12 @@ def draw_menu(current_button_colour, button_rect):
     text_rect = text_surface.get_rect(center=button_rect.center)
     SCREEN.blit(text_surface, text_rect)
 
+    hint_text = instruction_size.render("Press E/M/H to choose difficulty", True, (180, 180, 180))
+    hint_rect = hint_text.get_rect(center=(WIDTH//2, int(HEIGHT*0.78)))
+    SCREEN.blit(hint_text, hint_rect)
+
     pygame.display.flip()
+    return difficulty_rects, button_rect
 
 # Difficulty selection loop
 def select_difficulty(first):
@@ -183,7 +208,7 @@ def select_difficulty(first):
     selecting = True
     event = None
     while selecting:
-        draw_menu(current_button_colour, button_rect)
+        difficulty_rects, button_rect = draw_menu(current_button_colour, button_rect)
         current_button_colour = normal_colour  # Reset to normal colour
 
         for event in pygame.event.get():
@@ -195,22 +220,53 @@ def select_difficulty(first):
                 pygame.quit()
                 exit()
             elif event.type == pygame.KEYDOWN:
+                if event.key == K_ESCAPE:
+                    pygame.quit()
+                    exit()
                 keys = pygame.key.get_pressed()
                 if up_pressed(keys):
                     selected = (selected - 1) % len(difficulties)
                 if down_pressed(keys):
                     selected = (selected + 1) % len(difficulties)
-                if event.key == K_RETURN or right_pressed(keys):
+                if event.key == K_e:
+                    selected = 0
+                    difficulty = difficulties[selected].lower()
+                    settings = difficulty_settings[difficulty]
+                    selecting = False
+                elif event.key == K_m:
+                    selected = 1
+                    difficulty = difficulties[selected].lower()
+                    settings = difficulty_settings[difficulty]
+                    selecting = False
+                elif event.key == K_h:
+                    selected = 2
+                    difficulty = difficulties[selected].lower()
+                    settings = difficulty_settings[difficulty]
+                    selecting = False
+                elif event.key == K_s:
+                    show_all_highscores()
+                elif event.key == K_RETURN or right_pressed(keys):
                     difficulty = difficulties[selected].lower()
                     settings = difficulty_settings[difficulty]
                     selecting = False
             elif event.type == pygame.MOUSEBUTTONDOWN:
-                if event.button == 1 and button_rect.collidepoint(event.pos):
-                    show_instructions() 
-            elif event.type == pygame.KEYUP and event.key == K_h:
-                show_highscores(difficulties[selected].lower())
-                SCREEN.fill((30, 30, 30))
+                if event.button == 1:
+                    if button_rect.collidepoint(event.pos):
+                        show_instructions()
+                    else:
+                        for i, rect in enumerate(difficulty_rects):
+                            if rect.collidepoint(event.pos):
+                                selected = i
+                                difficulty = difficulties[selected].lower()
+                                settings = difficulty_settings[difficulty]
+                                selecting = False
+                                break
+
         mouse_pos = pygame.mouse.get_pos()
+        for i, rect in enumerate(difficulty_rects):
+            if rect.collidepoint(mouse_pos):
+                selected = i
+                break
         if button_rect.collidepoint(mouse_pos):
             if pygame.mouse.get_pressed()[0] == 0:
                 current_button_colour = hover_colour
@@ -224,6 +280,7 @@ missile_size = 10
 missile_colour = (255, 0, 0)  # Red
 exploding_missile_colour = (255, 165, 0)  # Orange for exploding missiles
 homing_missile_colour = (252, 243, 71)  # Yellow for homing missiles
+zigzag_missile_colour = (0, 255, 255)  # Cyan for zigzag missiles
 
 highscores = []
 score = 0
@@ -263,8 +320,60 @@ def show_highscores(difficulty):
             if event.type == QUIT:
                 pygame.quit()
                 exit()
+            elif event.type == pygame.KEYDOWN and event.key == K_ESCAPE:
+                pygame.quit()
+                exit()
             elif event.type == pygame.KEYUP:
                 waiting = False
+
+
+def show_all_highscores():
+    SCREEN.fill((30, 30, 30))
+    title_font = get_scaled_font(0.09)
+    heading_font = get_scaled_font(0.06)
+    score_font = get_scaled_font(0.045)
+    instruction_font = get_scaled_font(0.04)
+
+    title_text = title_font.render("All Highscores", True, (255, 255, 0))
+    title_rect = title_text.get_rect(center=(WIDTH//2, int(HEIGHT*0.10)))
+    SCREEN.blit(title_text, title_rect)
+
+    column_titles = ["Easy", "Medium", "Hard"]
+    columns = [get_highscores('easy', limit=10), get_highscores('medium', limit=10), get_highscores('hard', limit=10)]
+    column_centers = [WIDTH * 0.2, WIDTH * 0.5, WIDTH * 0.8]
+
+    for i, heading in enumerate(column_titles):
+        heading_text = heading_font.render(heading, True, (255, 255, 255))
+        heading_rect = heading_text.get_rect(center=(int(column_centers[i]), int(HEIGHT*0.18)))
+        SCREEN.blit(heading_text, heading_rect)
+
+        if columns[i]:
+            for j, (score_value, name) in enumerate(columns[i]):
+                score_line = score_font.render(f"{name}: {score_value}", True, (255, 255, 255))
+                score_rect = score_line.get_rect(midtop=(int(column_centers[i]), int(HEIGHT*0.24) + j * int(HEIGHT*0.075)))
+                SCREEN.blit(score_line, score_rect)
+        else:
+            no_score_text = score_font.render("No scores yet!", True, (200, 200, 200))
+            no_score_rect = no_score_text.get_rect(midtop=(int(column_centers[i]), int(HEIGHT*0.24)))
+            SCREEN.blit(no_score_text, no_score_rect)
+
+    instruction_text = instruction_font.render("Press any key to return", True, (100, 138, 200))
+    instruction_rect = instruction_text.get_rect(center=(WIDTH//2, int(HEIGHT*0.9)))
+    SCREEN.blit(instruction_text, instruction_rect)
+    pygame.display.flip()
+
+    waiting = True
+    while waiting:
+        for event in pygame.event.get():
+            if event.type == QUIT:
+                pygame.quit()
+                exit()
+            elif event.type == KEYDOWN and event.key == K_ESCAPE:
+                pygame.quit()
+                exit()
+            elif event.type == KEYDOWN:
+                waiting = False
+
 
 def save_highscore(difficulty, score):
     # Save highscores to the database
@@ -337,7 +446,10 @@ def prompt_name():
                 pygame.quit()
                 exit()
             elif event.type == KEYDOWN:
-                if event.key == K_RETURN:
+                if event.key == K_ESCAPE:
+                    pygame.quit()
+                    exit()
+                elif event.key == K_RETURN:
                     if name:
                         active = False
                 elif event.key == K_BACKSPACE:
@@ -464,8 +576,10 @@ def draw_missiles():
             draw_ngon(SCREEN, missile_colour, 5, missile_size, m[:2], m[3])
         elif m[5] == "exploding":
             draw_ngon(SCREEN, exploding_missile_colour, 5, missile_size + 3, m[:2], m[3], width=0)
-        else:
+        elif m[5] == "homing":
             draw_ngon(SCREEN, homing_missile_colour, 5, missile_size + 3, m[:2], m[3], width=3)
+        elif m[5] == "zigzag":
+            draw_ngon(SCREEN, zigzag_missile_colour, 4, missile_size + 4, m[:2], m[3], width=2)
 
 def move_missiles():
     global score
@@ -475,7 +589,24 @@ def move_missiles():
         direction = m[2]
         speed = m[4]
 
-        if m[5] != "homing":
+        if m[5] == "normal":
+            if direction == "down":
+                m[1] += speed
+                if m[1] > HEIGHT:
+                    to_remove.append(m)
+            elif direction == "up":
+                m[1] -= speed
+                if m[1] < 0:
+                    to_remove.append(m)
+            elif direction == "right":
+                m[0] += speed
+                if m[0] > WIDTH:
+                    to_remove.append(m)
+            elif direction == "left":
+                m[0] -= speed
+                if m[0] < 0:
+                    to_remove.append(m)
+        elif m[5] == "exploding":
             if direction == "down":
                 m[1] += speed
                 if m[1] > HEIGHT:
@@ -493,42 +624,61 @@ def move_missiles():
                 if m[0] < 0:
                     to_remove.append(m)
 
-            # Exploding missile behavior
-            if m[5] == "exploding":
-                explode_at = m[6]
+            explode_at = m[6]
 
-                # Distance from explosion point
-                distance = None
-                if m[2] == "down":
-                    distance = explode_at - m[1]
-                elif m[2] == "up":
-                    distance = m[1] - explode_at
-                elif m[2] == "right":
-                    distance = explode_at - m[0]
-                elif m[2] == "left":
-                    distance = m[0] - explode_at
+            # Distance from explosion point
+            distance = None
+            if m[2] == "down":
+                distance = explode_at - m[1]
+            elif m[2] == "up":
+                distance = m[1] - explode_at
+            elif m[2] == "right":
+                distance = explode_at - m[0]
+            elif m[2] == "left":
+                distance = m[0] - explode_at
 
-                if distance <= 50:
-                    flash_color = (255, 0, 0)
-                    draw_rocking_missile(SCREEN, {
-                        'colour': flash_color,
-                        'n': 5,
-                        'radius': missile_size + 3,
-                        'position': (m[0], m[1]),
-                        'angle': m[3]
-                        }, 
-                        m[6], max_rock_time=120) 
+            if distance <= 50:
+                flash_color = (255, 0, 0)
+                draw_rocking_missile(SCREEN, {
+                    'colour': flash_color,
+                    'n': 5,
+                    'radius': missile_size + 3,
+                    'position': (m[0], m[1]),
+                    'angle': m[3]
+                    }, 
+                    m[6], max_rock_time=120) 
 
-                # Trigger explosion if the missile reaches the explode_at position
-                # and remove it from the list
-                if (
-                    (m[2] == "down" and m[1] >= explode_at) or
-                    (m[2] == "up" and m[1] <= explode_at) or
-                    (m[2] == "right" and m[0] >= explode_at) or
-                    (m[2] == "left" and m[0] <= explode_at)
-                ):
-                    trigger_explosion(m[0], m[1])
-                    to_remove.append(m)
+            # Trigger explosion if the missile reaches the explode_at position
+            # and remove it from the list
+            if (
+                (m[2] == "down" and m[1] >= explode_at) or
+                (m[2] == "up" and m[1] <= explode_at) or
+                (m[2] == "right" and m[0] >= explode_at) or
+                (m[2] == "left" and m[0] <= explode_at)
+            ):
+                trigger_explosion(m[0], m[1])
+                to_remove.append(m)
+        elif m[5] == "zigzag":
+            phase = m[6] if m[6] is not None else 0
+            amplitude = 7
+            wave_speed = 0.18
+            if direction == "down":
+                m[0] += amplitude * sin(phase)
+                m[1] += speed * 2
+            elif direction == "up":
+                m[0] += amplitude * sin(phase)
+                m[1] -= speed * 2
+            elif direction == "right":
+                m[1] += amplitude * sin(phase)
+                m[0] += speed * 2
+            elif direction == "left":
+                m[1] += amplitude * sin(phase)
+                m[0] -= speed * 2
+
+            m[6] = phase + wave_speed
+
+            if m[0] < -missile_size or m[0] > WIDTH + missile_size or m[1] < -missile_size or m[1] > HEIGHT + missile_size:
+                to_remove.append(m)
         else: # if homing missile
             # move toward the player
             dx = player_pos[0] - m[0]
@@ -552,14 +702,24 @@ def spawn_missiles(direction):
     if random.randint(1, settings['missile_spawn_rate']) != 1:
         return
 
-    missile_type = "exploding" if random.randint(1, settings['missile_spawn_rate'] // 3) == 1 else "normal"
-    speed = random.randint(settings['missile_speed'] - 1, settings['missile_speed'] + 1)
+    weights = settings['missile_type_weights']
 
-    if missile_type == "exploding":
-        if random.randint(1, (settings['missile_spawn_rate'] // 2)) == 1: missile_type = "homing"
-    
+    roll = random.randint(1, 100)
+    if roll <= weights['homing']:
+        missile_type = "homing"
+    elif roll <= weights['homing'] + weights['exploding']:
+        missile_type = "exploding"
+    elif roll <= weights['homing'] + weights['exploding'] + weights['zigzag']:
+        missile_type = "zigzag"
+    else:
+        missile_type = "normal"
+
+    speed = random.randint(settings['missile_speed'] - 1, settings['missile_speed'] + 1)
     explode_at = None
-    if missile_type == "exploding":
+
+    if missile_type == "zigzag":
+        explode_at = random.uniform(0, 2 * 3.14159)
+    elif missile_type == "exploding":
         explode_at = random.randint(50, HEIGHT - 50) if direction in ("up", "down") else random.randint(50, WIDTH - 50)
 
     # Missile start position (x, y)
@@ -608,10 +768,24 @@ def check_collision():
         cy = surf_size // 2
 
         # Draw the missile on temp surface using same appearance as draw_missiles
-        colour = exploding_missile_colour if m[5] != "normal" else missile_colour
-        width = 0 if m[5] != "normal" else 2
+        if m[5] == "normal":
+            colour = missile_colour
+            width = 2
+            n = 5
+        elif m[5] == "exploding":
+            colour = exploding_missile_colour
+            width = 0
+            n = 5
+        elif m[5] == "homing":
+            colour = homing_missile_colour
+            width = 3
+            n = 5
+        else:
+            colour = zigzag_missile_colour
+            width = 2
+            n = 4
         # draw_ngon expects (Surface, colour, n, radius, position, angle=0, width=2)
-        draw_ngon(surf, colour, 5, radius, (cx, cy), angle=m[3], width=width)
+        draw_ngon(surf, colour, n, radius, (cx, cy), angle=m[3], width=width)
 
         missile_mask = pygame.mask.from_surface(surf)
 
@@ -653,8 +827,8 @@ def cool_animation():
     arrow_font = get_scaled_font(1.3)
     arrow_text = arrow_font.render("\u00BB", True, (255, 255, 255))
 
-    spawn_x = 0
-    arrows = [spawn_x]
+    arrow_spacing = int(arrow_text.get_width() * 1.45)
+    arrows = [0]
     total_arrows_spawned = 1
     max_arrows = 3
 
@@ -665,7 +839,7 @@ def cool_animation():
     trail_surface = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
 
     # Time tracking
-    spawn_interval = 0.8  # seconds between each arrow
+    spawn_interval = 0.45  # seconds between each arrow
     time_since_last_spawn = 0
 
     pygame.mixer.music.play()  # Sound effects
@@ -693,9 +867,9 @@ def cool_animation():
         # Update positions
         arrows = [x + group_speed * dt for x in arrows]
 
-        # Spawn new arrow at fixed time intervals
+        # Spawn new arrow at fixed time intervals with even spacing
         if total_arrows_spawned < max_arrows and time_since_last_spawn >= spawn_interval:
-            arrows.append(spawn_x)
+            arrows.append(arrows[-1] - arrow_spacing)
             total_arrows_spawned += 1
             time_since_last_spawn = 0
 
@@ -711,7 +885,7 @@ def cool_animation():
         pygame.display.flip()
 
         # Exit condition
-        if total_arrows_spawned == max_arrows and arrows[-1] - round(WIDTH*0.48394495412844036) > WIDTH: # Caluculations by https://www.wolframalpha.com/input?i=400%2F1744+as+a+fraction
+        if total_arrows_spawned == max_arrows and max(arrows) - round(WIDTH*0.48394495412844036) > WIDTH: # Caluculations by https://www.wolframalpha.com/input?i=400%2F1744+as+a+fraction
             running = False
     
     pygame.mixer.music.stop()  # Stop sound effects
@@ -753,9 +927,10 @@ def play():
                 display_score()
                 run = False
             elif event.type == pygame.KEYDOWN:
-                keys = pygame.key.get_pressed()
                 if event.key == K_ESCAPE:
-                    pygame.display.iconify()
+                    pygame.quit()
+                    exit()
+                keys = pygame.key.get_pressed()
 
         keys = pygame.key.get_pressed()
         if left_pressed(keys) and player_pos[0] > 0:
@@ -855,25 +1030,23 @@ def draw_gameover(selected_option):
     SCREEN.blit(score_text, score_rect)
 
     options = ["Replay", "Change Difficulty", "Quit"]
+    rects = []
     for i, opt in enumerate(options):
-        for event in pygame.event.get():
-            if event.type == QUIT:
-                display_score()
-                pygame.quit()
-                exit()
         colour = (255, 255, 255)
         if i == selected_option:
             colour = (0, 255, 0)
         text = option_font.render(opt, True, colour)
         rect = text.get_rect(center=(WIDTH//2, int(HEIGHT*0.50) + i*int(HEIGHT*0.09)))
         SCREEN.blit(text, rect)
+        rects.append(rect)
     pygame.display.flip()
+    return rects
 
 def gameover_menu():
     SCREEN.fill((30, 30, 30))
 
-    selected_option = None
-    draw_gameover(selected_option)
+    selected_option = 0
+    rects = draw_gameover(selected_option)
     pygame.event.clear() # Clear all pending events
     pygame.time.wait(1) # Short delay to avoid instant selection
     while True:
@@ -883,34 +1056,45 @@ def gameover_menu():
                 pygame.quit()
                 exit()
             elif event.type == pygame.KEYDOWN:
-                keys = pygame.key.get_pressed()
-
                 if event.key == K_ESCAPE:
-                    pygame.display.iconify()
-
-                if selected_option is None:
-                    if up_pressed(keys):
-                        selected_option = 0
-                    elif down_pressed(keys):
-                        selected_option = 1
-                else:
-                    if up_pressed(keys):
-                        selected_option = (selected_option - 1) % 3
-                    elif down_pressed(keys):
-                        selected_option = (selected_option + 1) % 3
-                    elif event.key == K_RETURN or right_pressed(keys):
-                        if selected_option is None:
-                            selected_option = 0
-                        elif selected_option == 0:
-                            return True  # Replay
-                        elif selected_option == 1:
-                            return "change"  # Change difficulty
-                        elif selected_option == 2:
-                            return False # Quit
+                    pygame.quit()
+                    exit()
+                if event.key == K_s:
+                    show_all_highscores()
+                if event.key == K_r:
+                    return True
+                if event.key == K_c:
+                    return "change"
+                keys = pygame.key.get_pressed()
+                if up_pressed(keys):
+                    selected_option = (selected_option - 1) % 3
+                elif down_pressed(keys):
+                    selected_option = (selected_option + 1) % 3
+                elif event.key == K_RETURN or right_pressed(keys):
+                    if selected_option == 0:
+                        return True
+                    elif selected_option == 1:
+                        return "change"
+                    elif selected_option == 2:
+                        return False
+            elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                for i, rect in enumerate(rects):
+                    if rect.collidepoint(event.pos):
+                        if i == 0:
+                            return True
+                        elif i == 1:
+                            return "change"
+                        else:
+                            return False
             elif event.type == pygame.KEYUP and event.key == K_h:
                 show_highscores(difficulty)
-                
-        draw_gameover(selected_option)
+
+        mouse_pos = pygame.mouse.get_pos()
+        rects = draw_gameover(selected_option)
+        for i, rect in enumerate(rects):
+            if rect.collidepoint(mouse_pos):
+                selected_option = i
+                break
 
 ##### MAIN FUNCTION #####
 def main():
